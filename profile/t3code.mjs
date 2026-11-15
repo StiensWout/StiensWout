@@ -96,10 +96,10 @@ export function t3codeTitleSvg(theme) {
     `</svg>\n`;
 }
 
-// Round a maximum up to a tidy axis top, so its half is a tidy gridline too.
+// Round a maximum up to a tidy axis top: the next multiple of half its power of ten.
 const niceTop = (max) => {
-  const step = 10 ** Math.floor(Math.log10(max / 2));
-  return Math.ceil(max / 2 / step) * step * 2;
+  const unit = 10 ** Math.floor(Math.log10(max)) / 2;
+  return Math.ceil(max / unit) * unit;
 };
 
 // A bar drawn upward from (0, 0), its top corners rounded by r.
@@ -111,85 +111,232 @@ const bar = (w, h, fill, r = 2) => {
 
 export function t3codeChartsSvg(s, theme) {
   const t = THEMES[theme];
-  const W = 840;
-  const H = 316;
+  // 640 wide with large type, so it stays readable when a phone scales it down.
+  const W = 640;
   const css = [
     "@keyframes rise{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}",
     "@keyframes grow{from{transform:scaleY(0)}to{transform:scaleY(1)}}",
     "@keyframes fade{from{opacity:0}to{opacity:1}}",
   ];
-  const text = (x, y, str, { size = 11, fill = t.muted, weight = 400, anchor = "start", style = "" } = {}) =>
+  const text = (x, y, str, { size = 14, fill = t.muted, weight = 400, anchor = "start", style = "" } = {}) =>
     `<text x="${x}" y="${y}" font-size="${size}" fill="${fill}" font-weight="${weight}" text-anchor="${anchor}"${style ? ` style="${style}"` : ""}>${str}</text>`;
   const fadeIn = (delay) => `opacity:0;animation:fade 0.5s ease ${delay.toFixed(2)}s forwards`;
   const out = [];
 
-  // Headline numbers.
+  // Headline numbers, two by two.
   const heads = [[s.stars, "stars"], [s.contributors, "contributors"], [s.merged, "merged pull requests"], [s.releases, "releases"]];
   heads.forEach(([value, label], i) => {
+    const x = (i % 2) * 330;
+    const y = 42 + Math.floor(i / 2) * 84;
     out.push(`<g style="opacity:0;animation:rise 0.6s cubic-bezier(.2,.7,.2,1) ${(i * 0.12).toFixed(2)}s forwards">` +
-      text(i * 214, 34, fmt(value), { size: 30, fill: t.fg, weight: 700 }) + text(i * 214, 56, label, { size: 12.5 }) + `</g>`);
+      text(x, y, fmt(value), { size: 42, fill: t.fg, weight: 800 }) + text(x, y + 26, label, { size: 17 }) + `</g>`);
   });
 
-  const top = 104;
-  const base = 290;
-  const plotH = base - top - 30;
-  const axis = (x0, x1, yTop) =>
-    [0, yTop / 2, yTop].map((v) => {
+  // A bar chart: title, optional legend line, gridlines, bars from draw(i, x, w, scale).
+  const chart = ({ title, legend, top, n, max, draw, labels }) => {
+    const x0 = 64;
+    const plotTop = top + (legend ? 64 : 40);
+    const base = plotTop + 170;
+    const plotH = 150;
+    const yTop = niceTop(max);
+    out.push(text(0, top, title, { size: 21, fill: t.fg, weight: 700 }));
+    if (legend) {
+      let lx = 0;
+      legend.forEach(([name, color]) => {
+        out.push(`<rect x="${lx}" y="${top + 15}" width="13" height="13" rx="3" fill="${color}"/>` + text(lx + 19, top + 27, name, { size: 16 }));
+        lx += name.length * 9 + 44;
+      });
+    }
+    [0, yTop / 2, yTop].forEach((v) => {
       const y = base - (v / yTop) * plotH;
-      return `<line x1="${x0}" x2="${x1}" y1="${y}" y2="${y}" stroke="${t.grid}"/>` + text(x0 - 6, y + 4, fmt(v), { size: 10, anchor: "end" });
-    }).join("");
+      out.push(`<line x1="${x0}" x2="${W}" y1="${y}" y2="${y}" stroke="${t.grid}"/>` + text(x0 - 8, y + 5, fmt(v), { size: 14, anchor: "end" }));
+    });
+    const step = (W - x0) / n;
+    for (let i = 0; i < n; i++) draw(i, x0 + i * step, step, (v) => (v / yTop) * plotH, base);
+    labels(x0, step, base);
+    return base;
+  };
 
   // Commits per week, last 52 weeks.
-  {
-    const x0 = 38;
-    const x1 = 396;
-    const yTop = niceTop(Math.max(...s.weekly.map((w) => w.total)));
-    const step = (x1 - x0) / s.weekly.length;
-    out.push(text(0, top, "Commits per week, last 52 weeks", { size: 13, fill: t.fg, weight: 600 }));
-    out.push(axis(x0, x1, yTop));
-    let peak = 0;
-    s.weekly.forEach((w, i) => {
-      if (w.total > s.weekly[peak].total) peak = i;
-      out.push(`<g transform="translate(${(x0 + i * step + 1).toFixed(1)} ${base})"><g style="transform:scaleY(0);animation:grow 0.7s cubic-bezier(.2,.7,.2,1) ${(0.4 + i * 0.018).toFixed(3)}s forwards">${bar(step - 2, (w.total / yTop) * plotH, t.all)}</g></g>`);
-    });
-    const px = x0 + peak * step + step / 2;
-    out.push(text(px, base - (s.weekly[peak].total / yTop) * plotH - 7, `${fmt(s.weekly[peak].total)} at the peak`, { size: 10.5, fill: t.fg, weight: 600, anchor: px > x1 - 50 ? "end" : "middle", style: fadeIn(1.6) }));
-    [0, Math.floor(s.weekly.length / 2), s.weekly.length - 1].forEach((i, k) => {
+  let peak = 0;
+  s.weekly.forEach((w, i) => { if (w.total > s.weekly[peak].total) peak = i; });
+  const end1 = chart({
+    title: "Commits per week, last 52 weeks",
+    top: 232,
+    n: s.weekly.length,
+    max: Math.max(...s.weekly.map((w) => w.total)),
+    draw: (i, x, step, y, base) => {
+      out.push(`<g transform="translate(${(x + 1).toFixed(1)} ${base})"><g style="transform:scaleY(0);animation:grow 0.7s cubic-bezier(.2,.7,.2,1) ${(0.4 + i * 0.018).toFixed(3)}s forwards">${bar(Math.max(step - 2.5, 1.5), y(s.weekly[i].total), t.all)}</g></g>`);
+      if (i === peak) out.push(text(x + step / 2, base - y(s.weekly[i].total) - 9, `${fmt(s.weekly[i].total)} at the peak`, { size: 16, fill: t.fg, weight: 700, anchor: "end", style: fadeIn(1.6) }));
+    },
+    labels: (x0, step, base) => [0, Math.floor(s.weekly.length / 2), s.weekly.length - 1].forEach((i, k) => {
       const d = new Date(s.weekly[i].week * 1000);
-      out.push(text(x0 + i * step + step / 2, base + 16, `${MONTH(d.getUTCMonth())} ${d.getUTCFullYear()}`, { size: 10, anchor: ["start", "middle", "end"][k] }));
-    });
-  }
+      out.push(text(x0 + i * step + step / 2, base + 24, `${MONTH(d.getUTCMonth())} ${d.getUTCFullYear()}`, { size: 15, anchor: ["start", "middle", "end"][k] }));
+    }),
+  });
 
   // Merged PRs per month: everyone else's, with mine stacked on top.
-  {
-    const x0 = 482;
-    const x1 = W;
-    const yTop = niceTop(Math.max(...s.monthly.map((m) => m.all)));
-    const step = (x1 - x0) / s.monthly.length;
-    const bw = Math.min(26, step - 8);
-    out.push(text(440, top, "Merged pull requests per month", { size: 13, fill: t.fg, weight: 600 }));
-    out.push(`<rect x="${W - 132}" y="${top - 9}" width="10" height="10" rx="2" fill="${t.all}"/>` + text(W - 118, top, "everyone"));
-    out.push(`<rect x="${W - 54}" y="${top - 9}" width="10" height="10" rx="2" fill="${t.mine}"/>` + text(W - 40, top, "mine"));
-    out.push(axis(x0, x1, yTop));
-    s.monthly.forEach((m, i) => {
-      const x = x0 + i * step + (step - bw) / 2;
-      const hRest = ((m.all - m.mine) / yTop) * plotH;
-      const hMine = m.mine > 0 ? Math.max((m.mine / yTop) * plotH, 2) : 0;
+  const best = s.monthly.reduce((b, m, i) => (m.all > s.monthly[b].all ? i : b), 0);
+  const end2 = chart({
+    title: "Merged pull requests per month",
+    legend: [["everyone", t.all], ["mine", t.mine]],
+    top: end1 + 74,
+    n: s.monthly.length,
+    max: Math.max(...s.monthly.map((m) => m.all)),
+    draw: (i, x, step, y, base) => {
+      const m = s.monthly[i];
+      const bw = Math.min(40, step - 12);
+      const bx = x + (step - bw) / 2;
+      const hRest = y(m.all - m.mine);
+      const hMine = m.mine > 0 ? Math.max(y(m.mine), 3) : 0;
       // A 2px surface gap separates my segment from everyone else's.
-      const mine = hMine ? `<g transform="translate(0 ${-(hRest + 2)})">${bar(bw, hMine, t.mine)}</g>` : "";
-      out.push(`<g transform="translate(${x.toFixed(1)} ${base})"><g style="transform:scaleY(0);animation:grow 0.8s cubic-bezier(.2,.7,.2,1) ${(0.5 + i * 0.07).toFixed(2)}s forwards">${bar(bw, hRest, t.all, hMine ? 0 : 2)}${mine}</g></g>`);
-      out.push(text(x + bw / 2, base + 16, MONTH(m.month), { size: 10, anchor: "middle" }));
-    });
-    // Direct labels on the busiest month: its total and my part of it.
-    const best = s.monthly.reduce((b, m, i) => (m.all > s.monthly[b].all ? i : b), 0);
-    const bm = s.monthly[best];
-    const lx = x0 + best * step + step / 2;
-    const ly = base - (bm.all / yTop) * plotH - 4;
-    const anchor = best === s.monthly.length - 1 ? "end" : "middle";
-    const ax = anchor === "end" ? x0 + best * step + (step + bw) / 2 : lx;
-    out.push(text(ax, ly - 16, fmt(bm.all), { size: 10.5, fill: t.fg, weight: 600, anchor, style: fadeIn(1.7) }));
-    out.push(text(ax, ly - 4, `${fmt(bm.mine)} mine`, { size: 10, anchor, style: fadeIn(1.8) }));
-  }
+      const mine = hMine ? `<g transform="translate(0 ${-(hRest + 2)})">${bar(bw, hMine, t.mine, 3)}</g>` : "";
+      out.push(`<g transform="translate(${bx.toFixed(1)} ${base})"><g style="transform:scaleY(0);animation:grow 0.8s cubic-bezier(.2,.7,.2,1) ${(0.5 + i * 0.07).toFixed(2)}s forwards">${bar(bw, hRest, t.all, hMine ? 0 : 3)}${mine}</g></g>`);
+      out.push(text(x + step / 2, base + 24, MONTH(m.month), { size: 15, anchor: "middle" }));
+      if (i === best) {
+        const anchor = i === s.monthly.length - 1 ? "end" : "middle";
+        const lx = anchor === "end" ? bx + bw : x + step / 2;
+        const ly = base - y(m.all) - 6;
+        out.push(text(lx, ly - 20, fmt(m.all), { size: 16, fill: t.fg, weight: 700, anchor, style: fadeIn(1.7) }));
+        out.push(text(lx, ly - 2, `${fmt(m.mine)} mine`, { size: 15, anchor, style: fadeIn(1.8) }));
+      }
+    },
+    labels: () => {},
+  });
 
+  const H = end2 + 36;
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" font-family='${SANS}' role="img" aria-label="T3 Code: ${fmt(s.stars)} stars, ${fmt(s.contributors)} contributors, ${fmt(s.merged)} merged pull requests, ${fmt(s.releases)} releases; commits per week and merged pull requests per month"><style>${css.join("")}</style>${out.join("")}</svg>\n`;
+}
+
+// What T3 Code is, as a picture: the agents on the left flow into T3 Code,
+// which serves every client on the right. Lines draw in, a few pulses travel
+// through, then it settles.
+const AGENTS = ["Claude Code", "Codex", "Cursor", "OpenCode", "Grok Build", "Antigravity", "Kiro", "Pi", "Muse Code", "any ACP agent"];
+const CLIENTS = ["Desktop", "Web", "iPhone", "Android"];
+
+export function t3codeHubSvg(theme) {
+  const t = THEMES[theme];
+  const W = 640;
+  const hub = { x: 262, y: 62, w: 124, h: 160 };
+  const cy = hub.y + hub.h / 2;
+  const out = [];
+  out.push(`<defs><linearGradient id="lane" gradientUnits="userSpaceOnUse" x1="120" y1="0" x2="520" y2="0">` +
+    `${t.lane.map((c, i) => `<stop offset="${i / (t.lane.length - 1)}" stop-color="${c}"/>`).join("")}</linearGradient></defs>`);
+  const draw = (d, id, delay) =>
+    `<path id="${id}" d="${d}" pathLength="1" fill="none" stroke="url(#lane)" stroke-width="2" stroke-opacity="0.75" ` +
+    `style="stroke-dasharray:1;stroke-dashoffset:1;animation:draw .8s cubic-bezier(.5,0,.2,1) ${delay.toFixed(2)}s forwards"/>`;
+  const pulse = (id, delay, color) =>
+    `<circle r="4" fill="${color}" opacity="0"><animateMotion dur="1.4s" begin="${delay.toFixed(2)}s" repeatCount="3" calcMode="spline" keyTimes="0;1" keySplines="0.4 0 0.2 1"><mpath href="#${id}"/></animateMotion>` +
+    `<animate attributeName="opacity" values="0;1;1;0" keyTimes="0;0.1;0.85;1" dur="1.4s" begin="${delay.toFixed(2)}s" repeatCount="3"/></circle>`;
+  const fade = (d) => `opacity:0;animation:fade .4s ease ${d.toFixed(2)}s forwards`;
+
+  AGENTS.forEach((name, i) => {
+    const y = 20 + i * 27;
+    const ty = cy - 56 + i * (112 / (AGENTS.length - 1));
+    out.push(`<text x="122" y="${y + 5}" font-size="16" fill="${i === AGENTS.length - 1 ? t.muted : t.fg}" text-anchor="end" style="${fade(0.05 * i)}">${name}</text>`);
+    out.push(`<circle cx="132" cy="${y}" r="3.5" fill="${t.lane[0]}" style="${fade(0.05 * i)}"/>`);
+    out.push(draw(`M135 ${y} C200 ${y} 205 ${ty} ${hub.x} ${ty}`, `a${i}`, 0.35 + i * 0.05));
+    out.push(pulse(`a${i}`, 1.6 + i * 0.16, t.lane[1]));
+  });
+  CLIENTS.forEach((name, i) => {
+    const y = 52 + i * 60;
+    const sy = cy - 42 + i * 28;
+    out.push(draw(`M${hub.x + hub.w} ${sy} C${hub.x + hub.w + 70} ${sy} 455 ${y} 512 ${y}`, `c${i}`, 0.9 + i * 0.08));
+    out.push(`<circle cx="515" cy="${y}" r="3.5" fill="${t.lane[3]}" style="${fade(1.1 + i * 0.08)}"/>`);
+    out.push(`<text x="527" y="${y + 6}" font-size="17" fill="${t.fg}" font-weight="700" style="${fade(1.1 + i * 0.08)}">${name}</text>`);
+    out.push(pulse(`c${i}`, 2.6 + i * 0.25, t.lane[3]));
+  });
+  out.push(`<g style="opacity:0;animation:pop .6s cubic-bezier(.3,1.4,.5,1) .2s forwards;transform-origin:${hub.x + hub.w / 2}px ${cy}px">` +
+    `<rect x="${hub.x}" y="${hub.y}" width="${hub.w}" height="${hub.h}" rx="22" fill="${t.bg}" stroke="url(#lane)" stroke-width="3"/>` +
+    `<text x="${hub.x + hub.w / 2}" y="${cy - 4}" font-size="36" font-weight="800" fill="${t.fg}" text-anchor="middle">T3</text>` +
+    `<text x="${hub.x + hub.w / 2}" y="${cy + 22}" font-size="16" font-weight="600" fill="${t.muted}" text-anchor="middle">Code</text></g>`);
+  const lines = [
+    ["The open-source control plane for coding agents", 19, t.fg, 700],
+    ["Your own subscriptions · every agent in one place", 16, t.muted, 400],
+    ["desktop, web and phone · git built in", 16, t.muted, 400],
+  ];
+  lines.forEach(([str, size, fill, weight], i) =>
+    out.push(`<text x="${W / 2}" y="${310 + i * 26}" font-size="${size}" fill="${fill}" font-weight="${weight}" text-anchor="middle" style="${fade(1.6 + i * 0.15)}">${str}</text>`));
+  const H = 310 + lines.length * 26;
+  const css = "@keyframes draw{from{stroke-dashoffset:1}to{stroke-dashoffset:0}}@keyframes fade{from{opacity:0}to{opacity:1}}@keyframes pop{from{opacity:0;transform:scale(.6)}to{opacity:1;transform:scale(1)}}";
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" font-family='${SANS}' role="img" aria-label="T3 Code connects Claude Code, Codex, Cursor, OpenCode, Grok Build, Antigravity, Kiro, Pi, Muse Code and any ACP agent to desktop, web, iPhone and Android"><style>${css}</style>${out.join("")}</svg>\n`;
+}
+
+// My merged T3 Code PRs, by area and by kind, from their conventional-commit titles.
+const KINDS = [
+  ["fix", "fixes", { dark: "#4493f8", light: "#0969da" }],
+  ["perf", "speed", { dark: "#2ea043", light: "#1a7f37" }],
+  ["feat", "features", { dark: "#a371f7", light: "#8250df" }],
+  ["other", "other", { dark: "#db6d28", light: "#bc4c00" }],
+];
+const AREAS = [
+  ["Web app", ["web", "ui"]],
+  ["Server", ["server", "terminal"]],
+  ["Agent providers", ["pi", "acp", "providers", "provider", "cursor", "codex", "claude", "grok", "muse", "antigravity", "opencode"]],
+  ["Mobile", ["mobile", "ios", "android"]],
+  ["Desktop", ["desktop"]],
+];
+
+export async function myPrs(token, login) {
+  const titles = [];
+  for (let page = 1; page <= 10; page++) {
+    const res = await fetch(`https://api.github.com/search/issues?q=repo:${REPO}+author:${login}+is:pr+is:merged&per_page=100&page=${page}`, {
+      headers: { authorization: `bearer ${token}`, "user-agent": "profile-t3code", accept: "application/vnd.github+json" },
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(`search: ${res.status} ${JSON.stringify(json)}`);
+    titles.push(...json.items.map((i) => i.title));
+    if (titles.length >= json.total_count || json.items.length < 100) break;
+  }
+  return titles;
+}
+
+export function t3codeMineSvg(titles, theme) {
+  const t = THEMES[theme];
+  const rows = [...AREAS.map(([name]) => name), "Everything else"].map((name) => ({ name, counts: { fix: 0, perf: 0, feat: 0, other: 0 } }));
+  for (const title of titles) {
+    const m = title.match(/^([a-z]+)(?:\(([^)]+)\))?!?:/);
+    const kind = m && ["fix", "perf", "feat"].includes(m[1]) ? m[1] : "other";
+    const scope = m?.[2]?.split(/[,/]/)[0].trim().toLowerCase() ?? "";
+    const area = AREAS.findIndex(([, scopes]) => scopes.includes(scope));
+    rows[area === -1 ? rows.length - 1 : area].counts[kind]++;
+  }
+  const W = 640;
+  const rowH = 42;
+  const top = 104;
+  const H = top + rows.length * rowH;
+  const x0 = 168;
+  const x1 = W - 48;
+  const max = Math.max(...rows.map((r) => Object.values(r.counts).reduce((a, b) => a + b, 0)));
+  const scale = (x1 - x0) / max;
+  const out = [];
+  out.push(`<text x="0" y="24" font-size="22" font-weight="800" fill="${t.fg}">What I built in T3 Code</text>`);
+  out.push(`<text x="0" y="50" font-size="17" fill="${t.muted}">${fmt(titles.length)} merged pull requests, by area</text>`);
+  let lx = 0;
+  KINDS.forEach(([, label, colors]) => {
+    out.push(`<rect x="${lx}" y="66" width="13" height="13" rx="3" fill="${colors[theme]}"/><text x="${lx + 19}" y="78" font-size="16" fill="${t.muted}">${label}</text>`);
+    lx += label.length * 9 + 44;
+  });
+  rows.forEach((row, i) => {
+    const y = top + i * rowH;
+    const total = Object.values(row.counts).reduce((a, b) => a + b, 0);
+    out.push(`<text x="${x0 - 14}" y="${y + 18}" font-size="17" fill="${t.fg}" text-anchor="end">${row.name}</text>`);
+    let x = 0;
+    const segs = [];
+    for (const [kind, , colors] of KINDS) {
+      const w = row.counts[kind] * scale;
+      if (!w) continue;
+      // Segments sit 2px apart; the last one gets the rounded end.
+      segs.push({ x, w: Math.max(w - 2, 2), fill: colors[theme] });
+      x += w;
+    }
+    const last = segs.length - 1;
+    const body = segs.map((sg, k) => k === last
+      ? `<path d="M${sg.x} 0 H${sg.x + sg.w - 5} Q${sg.x + sg.w} 0 ${sg.x + sg.w} 5 V19 Q${sg.x + sg.w} 24 ${sg.x + sg.w - 5} 24 H${sg.x} Z" fill="${sg.fill}"/>`
+      : `<rect x="${sg.x}" y="0" width="${sg.w}" height="24" fill="${sg.fill}"/>`).join("");
+    out.push(`<g transform="translate(${x0} ${y})"><g style="transform:scaleX(0);animation:grow .8s cubic-bezier(.2,.7,.2,1) ${(0.3 + i * 0.1).toFixed(2)}s forwards">${body}</g></g>`);
+    out.push(`<text x="${x0 + x + 10}" y="${y + 18}" font-size="17" font-weight="700" fill="${t.fg}" style="opacity:0;animation:fade .4s ease ${(0.9 + i * 0.1).toFixed(2)}s forwards">${total}</text>`);
+  });
+  const css = "@keyframes grow{from{transform:scaleX(0)}to{transform:scaleX(1)}}@keyframes fade{from{opacity:0}to{opacity:1}}";
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" font-family='${SANS}' role="img" aria-label="${fmt(titles.length)} merged T3 Code pull requests by Wout, by area"><style>${css}</style>${out.join("")}</svg>\n`;
 }

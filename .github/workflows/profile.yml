@@ -1,6 +1,6 @@
-# Every day: draws the contribution snake and the title (profile/generate.mjs)
-# onto the output branch, where
-# README.md loads it from, and refreshes the merged T3 Code PR count in README.md.
+# Every day, and on every push: draws every image in README.md from live
+# GitHub data (profile/generate.mjs) onto the output branch, where README.md
+# loads them from.
 name: Profile
 
 on:
@@ -27,20 +27,6 @@ jobs:
           cd dist
           git init -q -b output
           git add .
-          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" commit -q -m "Update snake"
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" commit -q -m "Update profile images"
           git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" output
 
-  pr-count:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7.0.1
-      - name: Refresh the merged T3 Code PR count
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          n=$(gh api "search/issues?q=repo:pingdotgg/t3code+author:${{ github.repository_owner }}+is:pr+is:merged&per_page=1" --jq .total_count)
-          [ "$n" -gt 0 ]
-          sed -i -E "s/\[[0-9,]+ merged PRs\]/[$n merged PRs]/" README.md
-          git diff --quiet && exit 0
-          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" commit -q -am "Update the T3 Code PR count to $n"
-          git push

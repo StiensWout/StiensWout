@@ -4,13 +4,19 @@
 //                           day, then a results screen and a countdown to the
 //                           next run
 //   title-{dark,light}.svg  the name spelled in contribution cells
-//   t3code-title-{dark,light}.svg, t3code-{dark,light}.svg
-//                           the T3 Code title and its animated charts (t3code.mjs)
+//   t3code-*.svg            the T3 Code title, what it is, its numbers and my
+//                           part in it (t3code.mjs)
+//   mrstreamer-*.svg        the Mr. Streamer title, what it does and its
+//                           downloads (mrstreamer.mjs)
+//   button-*.svg            one link button per README link (buttons.mjs)
 //
 //   GITHUB_TOKEN=... node profile/generate.mjs [OUT_DIR]
-//   CALENDAR_JSON=cal.json T3CODE_JSON=t3code.json node profile/generate.mjs [OUT_DIR]   (offline)
+//   Offline, from saved data: CALENDAR_JSON=cal.json T3CODE_JSON=t3code.json
+//   MRSTREAMER_JSON=mrstreamer.json node profile/generate.mjs [OUT_DIR]
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { t3codeChartsSvg, t3codeStats, t3codeTitleSvg } from "./t3code.mjs";
+import { buttonSvg } from "./buttons.mjs";
+import { mrstreamerChartsSvg, mrstreamerGuideSvg, mrstreamerStats, mrstreamerTitleSvg } from "./mrstreamer.mjs";
+import { myPrs, t3codeChartsSvg, t3codeHubSvg, t3codeMineSvg, t3codeStats, t3codeTitleSvg } from "./t3code.mjs";
 
 const LOGIN = process.env.PROFILE_LOGIN ?? "StiensWout";
 const NAME = "WOUT STIENS";
@@ -210,25 +216,20 @@ function snakeSvg(calendar, theme) {
   );
   out.push(label(legendX + 5 * P + 2, footY, "More"));
 
-  // The snake's body is one stroke along the whole route. Its dash is the body:
-  // the dash's far end follows the head, and the dash lengthens by one cell
-  // during the tick after each active day is eaten, so the tail waits a beat.
-  const route = path.map((p) => `${cellX(p.c) + S / 2} ${cellY(p.r) + S / 2}`).join(" L ");
-  const lengthAt = (k) => START_LENGTH - 1 + eaten.filter((e) => e.j < k).length;
-  const lastTick = path.length - 1;
-  const stops = [];
-  for (let k = 0; k <= lastTick; k++) {
-    const turn = k === 0 || k === lastTick || lengthAt(k + 1) - lengthAt(k) !== lengthAt(k) - lengthAt(k - 1);
-    if (!turn) continue;
-    const len = lengthAt(k) * P;
-    stops.push(`${pct(k * TICK, total)}{stroke-dasharray:${len}px 100000px;stroke-dashoffset:${len - k * P}px}`);
+  // The body is a chain of beads. Bead i follows the head's path i ticks
+  // behind it, and appears once the snake has grown that long. Only transform
+  // and opacity animate, which every engine handles (a stroked dash body drew
+  // nothing in WebKit, so Safari and GitHub's iOS app showed a broken snake).
+  for (let i = finalLength - 1; i >= 1; i--) {
+    const anims = [`mv ${total}s linear ${(i * TICK).toFixed(3)}s infinite backwards`];
+    if (i >= START_LENGTH) {
+      const grow = eaten[i - START_LENGTH].j * TICK;
+      css.push(`@keyframes g${i}{0%,${pct(grow, total)}{opacity:0}${pct(grow + 0.01, total)},100%{opacity:1}}`);
+      anims.push(`g${i} ${total}s linear infinite`);
+    }
+    const fill = mix(t.head, t.tail, i / Math.max(1, finalLength - 1));
+    out.push(`<g style="animation:${anims.join(",")}${i >= START_LENGTH ? ";opacity:0" : ""}"><circle r="5.6" fill="${fill}"/></g>`);
   }
-  const endLen = lengthAt(lastTick) * P;
-  css.push(`@keyframes body{${stops.join("")}100%{stroke-dasharray:${endLen}px 100000px;stroke-dashoffset:${endLen - lastTick * P}px}}`);
-  const body = (stroke, width, extra = "") =>
-    `<path d="M ${route}" fill="none" stroke="${stroke}" stroke-width="${width}" stroke-linecap="round" stroke-linejoin="round" ${extra}style="animation:body ${total}s linear infinite;stroke-dasharray:0 100000px"/>`;
-  out.push(body(t.tail, 10));
-  out.push(body(t.head, 3.5, `stroke-opacity="0.55" `));
   out.push(
     `<g style="animation:mv ${total}s linear infinite backwards"><rect x="-7.5" y="-6.5" width="15" height="13" rx="5" fill="${t.head}"/>` +
       `<circle cx="2.5" cy="-3.2" r="2" fill="${t.eye}"/><circle cx="2.5" cy="3.2" r="2" fill="${t.eye}"/>` +
@@ -318,11 +319,34 @@ for (const theme of Object.keys(THEMES)) {
   writeFileSync(`${OUT}/snake-${theme}.svg`, snakeSvg(calendar, theme));
   writeFileSync(`${OUT}/title-${theme}.svg`, titleSvg(theme));
 }
-const t3 = process.env.T3CODE_JSON
-  ? JSON.parse(readFileSync(process.env.T3CODE_JSON, "utf8"))
-  : await t3codeStats(process.env.GITHUB_TOKEN, LOGIN);
+const saved = (name) => process.env[name] && JSON.parse(readFileSync(process.env[name], "utf8"));
+const t3 = saved("T3CODE_JSON") || {
+  ...(await t3codeStats(process.env.GITHUB_TOKEN, LOGIN)),
+  titles: await myPrs(process.env.GITHUB_TOKEN, LOGIN),
+};
+const ms = saved("MRSTREAMER_JSON") || (await mrstreamerStats(process.env.GITHUB_TOKEN));
+
+// Charts reveal over a few seconds: every CSS animation time in them is stretched.
+const slower = (svg, factor = 2.4) =>
+  svg.replace(/animation:([^;"]*)/g, (_, decl) => `animation:${decl.replace(/(\d*\.?\d+)s\b/g, (__, n) => `${(Number(n) * factor).toFixed(2)}s`)}`);
+
+const BUTTONS = {
+  t3code: [["Download", "#3fb950"], ["iOS", "#39c5cf"], ["Android", "#58a6ff"], ["Web", "#8b8cf6"], ["GitHub", "#a371f7"]],
+  mrstreamer: [["mrstreamer.app"], ["Download"], ["GitHub"]],
+};
 for (const theme of Object.keys(THEMES)) {
   writeFileSync(`${OUT}/t3code-title-${theme}.svg`, t3codeTitleSvg(theme));
-  writeFileSync(`${OUT}/t3code-${theme}.svg`, t3codeChartsSvg(t3, theme));
+  writeFileSync(`${OUT}/t3code-hub-${theme}.svg`, slower(t3codeHubSvg(theme), 1.6));
+  writeFileSync(`${OUT}/t3code-${theme}.svg`, slower(t3codeChartsSvg(t3, theme)));
+  writeFileSync(`${OUT}/t3code-mine-${theme}.svg`, slower(t3codeMineSvg(t3.titles, theme)));
+  writeFileSync(`${OUT}/mrstreamer-title-${theme}.svg`, mrstreamerTitleSvg(theme));
+  writeFileSync(`${OUT}/mrstreamer-guide-${theme}.svg`, slower(mrstreamerGuideSvg(theme), 1.6));
+  writeFileSync(`${OUT}/mrstreamer-${theme}.svg`, slower(mrstreamerChartsSvg(ms, theme)));
+  for (const [section, buttons] of Object.entries(BUTTONS)) {
+    buttons.forEach(([label, accent], index) => {
+      const slug = label.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+      writeFileSync(`${OUT}/button-${section}-${slug}-${theme}.svg`, buttonSvg(label, theme, { index, accent }));
+    });
+  }
 }
 console.log(`wrote ${OUT}: ${calendar.totalContributions} contributions`);
