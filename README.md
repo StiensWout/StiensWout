@@ -12,7 +12,14 @@
   </picture>
 </p>
 
-## T3 Code
+<p align="center">
+  <a href="https://t3.codes">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/StiensWout/StiensWout/output/t3code-title-dark.svg?v=2">
+      <img alt="T3 Code" src="https://raw.githubusercontent.com/StiensWout/StiensWout/output/t3code-title-light.svg?v=2">
+    </picture>
+  </a>
+</p>
 
 <a href="https://github.com/pingdotgg/t3code">
   <picture>

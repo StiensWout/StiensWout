@@ -1,8 +1,10 @@
 // The T3 Code section of the profile README:
 //   t3codeStats(token, login)   live numbers for pingdotgg/t3code from GitHub
-//   t3codeTitleSvg(theme)       "T3 CODE" drawn as a git graph that draws itself in
+//   t3codeTitleSvg(theme)       "T3 CODE" outlined, filled by a gradient sweep once
 //   t3codeChartsSvg(s, theme)   headline numbers, commits per week and merged PRs
 //                               per month (mine stacked on top), animated in once
+import { readFileSync } from "node:fs";
+
 const REPO = "pingdotgg/t3code";
 const SANS = `-apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif`;
 const THEMES = {
@@ -68,51 +70,30 @@ export async function t3codeStats(token, login) {
   };
 }
 
-// "T3 CODE" as a git graph: each letter is a branch line with commits at its
-// joints, the lanes running green to cyan, blue and violet. The lines draw themselves in, then the commits pop in, once per page load.
-const LETTERS = {
-  T: { lines: [[[0, 0], [4, 0]], [[2, 0], [2, 6]]], dots: [[0, 0], [4, 0], [2, 6]] },
-  3: { lines: [[[0, 0], [4, 0], [4, 6], [0, 6]], [[1.5, 3], [4, 3]]], dots: [[0, 0], [1.5, 3], [0, 6]] },
-  C: { lines: [[[4, 0], [0, 0], [0, 6], [4, 6]]], dots: [[4, 0], [4, 6]] },
-  O: { lines: [[[0, 0], [4, 0], [4, 6], [0, 6], [0, 0]]], dots: [[0, 0], [4, 6]] },
-  D: { lines: [[[0, 0], [2.6, 0], [4, 1.4], [4, 4.6], [2.6, 6], [0, 6], [0, 0]]], dots: [[0, 0], [0, 6]] },
-  E: { lines: [[[4, 0], [0, 0], [0, 6], [4, 6]], [[0, 3], [3, 3]]], dots: [[4, 0], [3, 3], [4, 6]] },
-};
+// "T3 CODE" as outlined letters that fill with a green-to-violet sweep once,
+// left to right, as the page loads. The letter outlines come from
+// t3code-title.json (Unbounded ExtraBold, SIL OFL), so every viewer sees the
+// same shapes. The sweep uses SMIL, which images in GitHub READMEs play.
+const TITLE = JSON.parse(readFileSync(new URL("./t3code-title.json", import.meta.url), "utf8"));
 
 export function t3codeTitleSvg(theme) {
   const t = THEMES[theme];
-  const U = 15; // grid unit
-  const pad = 10;
-  let x = 0;
-  const placed = [];
-  for (const ch of ["T", "3", " ", "C", "O", "D", "E"]) {
-    if (ch === " ") { x += 3.5; continue; }
-    placed.push({ ch, x });
-    x += 6;
-  }
-  const width = (x - 2) * U + pad * 2;
-  const height = 6 * U + pad * 2;
-  const css = [
-    "@keyframes draw{from{stroke-dashoffset:1}to{stroke-dashoffset:0}}",
-    "@keyframes pop{from{opacity:0;transform:scale(0.2)}to{opacity:1;transform:scale(1)}}",
-  ];
-  const out = [`<defs><linearGradient id="lane" gradientUnits="userSpaceOnUse" x1="${pad}" y1="0" x2="${width - pad}" y2="0">` +
-    `${t.lane.map((c, i) => `<stop offset="${i / (t.lane.length - 1)}" stop-color="${c}"/>`).join("")}</linearGradient></defs>`];
-  const at = ([gx, gy], ox) => [pad + (ox + gx) * U, pad + gy * U];
-  placed.forEach(({ ch, x: ox }, i) => {
-    const { lines, dots } = LETTERS[ch];
-    lines.forEach((line, j) => {
-      const d = line.map((pt, k) => `${k ? "L" : "M"}${at(pt, ox).join(" ")}`).join(" ");
-      out.push(`<path d="${d}" pathLength="1" fill="none" stroke="url(#lane)" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" ` +
-        `style="stroke-dasharray:1;stroke-dashoffset:1;animation:draw 0.7s cubic-bezier(.5,0,.2,1) ${(0.15 + i * 0.16 + j * 0.2).toFixed(2)}s forwards"/>`);
-    });
-    dots.forEach((pt, j) => {
-      const [cx, cy] = at(pt, ox);
-      out.push(`<g transform="translate(${cx} ${cy})"><circle r="6.5" fill="${t.bg}" stroke="url(#lane)" stroke-width="3.5" ` +
-        `style="opacity:0;animation:pop 0.35s cubic-bezier(.3,1.6,.5,1) ${(0.75 + i * 0.16 + j * 0.08).toFixed(2)}s forwards"/></g>`);
-    });
-  });
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" role="img" aria-label="T3 Code"><style>${css.join("")}</style>${out.join("")}</svg>\n`;
+  const pad = 14;
+  const w = Math.ceil(TITLE.width + pad * 2);
+  const h = Math.ceil(TITLE.capHeight + pad * 2);
+  const ease = `calcMode="spline" keyTimes="0;1" keySplines="0.65 0 0.25 1"`;
+  const sweep = `dur="1.6s" begin="0.3s" fill="freeze" ${ease}`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" role="img" aria-label="T3 Code">` +
+    `<defs><linearGradient id="lane" gradientUnits="userSpaceOnUse" x1="${pad}" y1="0" x2="${w - pad}" y2="0">` +
+    `${t.lane.map((c, i) => `<stop offset="${i / (t.lane.length - 1)}" stop-color="${c}"/>`).join("")}</linearGradient>` +
+    `<clipPath id="sweep"><rect x="0" y="0" width="0" height="${h}"><animate attributeName="width" from="0" to="${w}" ${sweep}/></rect></clipPath></defs>` +
+    `<g transform="translate(${pad} ${pad})"><path d="${TITLE.d}" fill="none" stroke="url(#lane)" stroke-width="1.6" stroke-linejoin="round"/></g>` +
+    `<g clip-path="url(#sweep)"><g transform="translate(${pad} ${pad})"><path d="${TITLE.d}" fill="url(#lane)"/></g></g>` +
+    // The sweep's bright leading edge, gone once the letters are full.
+    `<rect x="0" y="${pad - 6}" width="2" height="${TITLE.capHeight + 12}" rx="1" fill="${t.fg}" opacity="0">` +
+    `<animate attributeName="x" from="0" to="${w - 2}" ${sweep}/>` +
+    `<animate attributeName="opacity" values="0;0.85;0.85;0" keyTimes="0;0.08;0.85;1" dur="1.6s" begin="0.3s" fill="freeze"/></rect>` +
+    `</svg>\n`;
 }
 
 // Round a maximum up to a tidy axis top, so its half is a tidy gridline too.
