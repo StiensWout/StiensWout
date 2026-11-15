@@ -24,7 +24,8 @@ jobs:
             dist/snake-dark.svg?palette=github-dark
       - name: Publish to the output branch
         run: |
-          cd dist
+          # dist belongs to root (the snk container), so publish from a copy
+          mkdir out && cp dist/*.svg out/ && cd out
           git init -q -b output
           git add .
           git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" commit -q -m "Update snake"
