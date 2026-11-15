@@ -4,12 +4,13 @@
 //                           day, then a results screen and a countdown to the
 //                           next run
 //   title-{dark,light}.svg  the name spelled in contribution cells
-//   t3code.svg              an animated T3 Code scene with the repo's live numbers (t3code.mjs)
+//   t3code-title-{dark,light}.svg, t3code-{dark,light}.svg
+//                           the T3 Code title and its animated charts (t3code.mjs)
 //
 //   GITHUB_TOKEN=... node profile/generate.mjs [OUT_DIR]
-//   CALENDAR_JSON=cal.json node profile/generate.mjs [OUT_DIR]   (offline)
+//   CALENDAR_JSON=cal.json T3CODE_JSON=t3code.json node profile/generate.mjs [OUT_DIR]   (offline)
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { t3codeStats, t3codeSvg } from "./t3code.mjs";
+import { t3codeChartsSvg, t3codeStats, t3codeTitleSvg } from "./t3code.mjs";
 
 const LOGIN = process.env.PROFILE_LOGIN ?? "StiensWout";
 const NAME = "WOUT STIENS";
@@ -115,11 +116,22 @@ function snakePath(weeks, exitLength) {
   return path;
 }
 
+// GitHub's weeks start on Sunday; these start on Monday, with each day's row set.
+function mondayWeeks(weeks) {
+  const out = [];
+  for (const d of weeks.flatMap((w) => w.contributionDays)) {
+    const row = (d.weekday + 6) % 7;
+    if (!out.length || row === 0) out.push({ contributionDays: [] });
+    out.at(-1).contributionDays.push({ ...d, row });
+  }
+  return out;
+}
+
 function snakeSvg(calendar, theme) {
   const t = THEMES[theme];
-  const { weeks } = calendar;
+  const weeks = mondayWeeks(calendar.weeks);
   const days = new Map();
-  weeks.forEach((w, c) => w.contributionDays.forEach((d) => days.set(`${c},${d.weekday}`, d)));
+  weeks.forEach((w, c) => w.contributionDays.forEach((d) => days.set(`${c},${d.row}`, d)));
 
   const active = [...days.values()].filter((d) => d.contributionCount > 0).length;
   const finalLength = START_LENGTH + active;
@@ -171,7 +183,7 @@ function snakeSvg(calendar, theme) {
       lastMonthCol = c;
     }
   });
-  [[1, "Mon"], [3, "Wed"], [5, "Fri"]].forEach(([r, d]) => out.push(label(LEFT - 6, cellY(r) + 9, d, "end")));
+  [[0, "Mon"], [2, "Wed"], [4, "Fri"]].forEach(([r, d]) => out.push(label(LEFT - 6, cellY(r) + 9, d, "end")));
 
   // The grid, with active days on top so they can be eaten.
   for (const [key, d] of days) {
@@ -306,8 +318,11 @@ for (const theme of Object.keys(THEMES)) {
   writeFileSync(`${OUT}/snake-${theme}.svg`, snakeSvg(calendar, theme));
   writeFileSync(`${OUT}/title-${theme}.svg`, titleSvg(theme));
 }
-const repoStats = process.env.CALENDAR_JSON
-  ? { stars: 61027, contributors: 478, release: "v0.1.9" }
-  : await t3codeStats(process.env.GITHUB_TOKEN);
-writeFileSync(`${OUT}/t3code.svg`, t3codeSvg(repoStats));
+const t3 = process.env.T3CODE_JSON
+  ? JSON.parse(readFileSync(process.env.T3CODE_JSON, "utf8"))
+  : await t3codeStats(process.env.GITHUB_TOKEN, LOGIN);
+for (const theme of Object.keys(THEMES)) {
+  writeFileSync(`${OUT}/t3code-title-${theme}.svg`, t3codeTitleSvg(theme));
+  writeFileSync(`${OUT}/t3code-${theme}.svg`, t3codeChartsSvg(t3, theme));
+}
 console.log(`wrote ${OUT}: ${calendar.totalContributions} contributions`);

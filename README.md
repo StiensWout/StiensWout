@@ -14,7 +14,12 @@
 
 ## T3 Code
 
-<a href="https://t3.codes"><img alt="T3 Code: a thread started at the desk, handed from Claude to Codex, approved from the phone and shipped as a pull request" src="https://raw.githubusercontent.com/StiensWout/StiensWout/output/t3code.svg"></a>
+<a href="https://github.com/pingdotgg/t3code">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/StiensWout/StiensWout/output/t3code-dark.svg">
+    <img alt="T3 Code in numbers: stars, contributors, merged pull requests and releases, commits per week and merged pull requests per month with mine highlighted" src="https://raw.githubusercontent.com/StiensWout/StiensWout/output/t3code-light.svg">
+  </picture>
+</a>
 
 **[T3 Code](https://github.com/pingdotgg/t3code)** is the open-source control plane for coding agents. It runs the agents on your machine and gives them one fast interface: start a thread at your desk, then approve the next step from your phone.
 

@@ -1,227 +1,214 @@
-// An animated T3 Code scene for the profile README: a thread started at the
-// desk, handed from Claude to Codex, approved from the phone, and shipped as a
-// pull request (the real #32947). The footer carries the repo's live numbers.
-//
-//   t3codeSvg({ stars, contributors, release })  ->  SVG text
-
-const D = 18; // seconds per loop
-const W = 840;
-const H = 482;
-const C = {
-  bg: "#000000", panel: "#0a0a0a", raised: "#161616", border: "#262626",
-  fg: "#ededed", muted: "#8a8a8a", faint: "#5c5c5c",
-  violet: "#a78bfa", green: "#3fb950", red: "#f85149", amber: "#d29922",
-};
+// The T3 Code section of the profile README:
+//   t3codeStats(token, login)   live numbers for pingdotgg/t3code from GitHub
+//   t3codeTitleSvg(theme)       "T3 CODE" drawn as a git graph that draws itself in
+//   t3codeChartsSvg(s, theme)   headline numbers, commits per week and merged PRs
+//                               per month (mine stacked on top), animated in once
+const REPO = "pingdotgg/t3code";
 const SANS = `-apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif`;
-const MONO = `ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace`;
+const THEMES = {
+  dark: { bg: "#0d1117", fg: "#e6edf3", muted: "#8b949e", grid: "#21262d", all: "#2ea043", mine: "#a371f7", lane: ["#3fb950", "#39c5cf", "#58a6ff", "#a371f7"] },
+  light: { bg: "#ffffff", fg: "#1f2328", muted: "#656d76", grid: "#eaeef2", all: "#2da44e", mine: "#8250df", lane: ["#1a7f37", "#1b7c83", "#0969da", "#8250df"] },
+};
+const fmt = (n) => n.toLocaleString("en-US");
+const MONTH = (i) => new Date(Date.UTC(2000, i, 1)).toLocaleString("en-US", { month: "short", timeZone: "UTC" });
 
-const esc = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-const p = (t) => `${((Math.min(Math.max(t, 0), D) / D) * 100).toFixed(3)}%`;
-
-export function t3codeSvg({ stars, contributors, release }) {
-  const css = [];
-  let n = 0;
-  const anim = (frames, timing = "linear") => {
-    const name = `k${n++}`;
-    css.push(`@keyframes ${name}{${frames}}`);
-    return `animation:${name} ${D}s ${timing} infinite`;
+export async function t3codeStats(token, login) {
+  const headers = { authorization: `bearer ${token}`, "user-agent": "profile-t3code", accept: "application/vnd.github+json" };
+  const rest = (path) => fetch(`https://api.github.com/${path}`, { headers });
+  const graphql = async (query) => {
+    const res = await fetch("https://api.github.com/graphql", { method: "POST", headers, body: JSON.stringify({ query }) });
+    const json = await res.json();
+    if (!res.ok || json.errors) throw new Error(`GraphQL: ${JSON.stringify(json.errors ?? json)}`);
+    return json.data;
   };
-  // Visible from `from` to `to` seconds into the loop, with short fades.
-  const show = (from, to = D - 0.5, fade = 0.25) => {
-    const start = from <= 0 ? `0%,${p(to)}{opacity:1}` : `0%,${p(from)}{opacity:0}${p(from + fade)},${p(to)}{opacity:1}`;
-    return `opacity:0;${anim(`${start}${p(to + fade)},100%{opacity:0}`)}`;
-  };
-  const text = (x, y, s, { size = 12.5, fill = C.fg, weight = 400, font = SANS, anchor = "start", style = "" } = {}) =>
-    `<text x="${x}" y="${y}" font-size="${size}" fill="${fill}" font-weight="${weight}" font-family='${font}' text-anchor="${anchor}"${style ? ` style="${style}"` : ""}>${s}</text>`;
-  const rect = (x, y, w, h, fill, { rx = 0, stroke, style = "" } = {}) =>
-    `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${rx}" fill="${fill}"${stroke ? ` stroke="${stroke}"` : ""}${style ? ` style="${style}"` : ""}/>`;
-  const g = (style, body) => `<g style="${style}">${body}</g>`;
 
-  const out = [];
-  out.push(rect(0, 0, W, H, C.bg, { rx: 16 }));
+  const repo = await rest(`repos/${REPO}`).then((r) => r.json());
+  // The API's contributor list stops linking users after 500 author emails, so
+  // take the count GitHub's own repo page shows (its sidebar data), and fall back
+  // to the API's list with anonymous contributors.
+  let contributors = await fetch(`https://github.com/${REPO}/_sidebar`, {
+    headers: { accept: "application/json", "x-requested-with": "XMLHttpRequest", "user-agent": "profile-t3code" },
+  }).then((r) => (r.ok ? r.json() : null)).then((j) => j?.contributors?.contributorCount).catch(() => undefined);
+  if (!contributors) {
+    const res = await rest(`repos/${REPO}/contributors?per_page=1&anon=1`);
+    contributors = Number(res.headers.get("link")?.match(/[?&]page=(\d+)>; rel="last"/)?.[1] ?? 1);
+  }
 
-  // Desktop window.
-  out.push(rect(10.5, 10.5, 600, 400, C.bg, { rx: 12, stroke: C.border }));
-  [28, 46, 64].forEach((x) => out.push(`<circle cx="${x}" cy="28" r="5" fill="#2e2e2e"/>`));
-  out.push(text(310, 32, "T3 Code", { size: 12, fill: C.muted, anchor: "middle" }));
-  out.push(`<line x1="11" y1="46.5" x2="610" y2="46.5" stroke="${C.border}"/>`);
-  out.push(`<line x1="170.5" y1="47" x2="170.5" y2="410" stroke="${C.border}"/>`);
+  // GitHub computes commit activity on demand and answers 202 until it is ready.
+  let weekly;
+  for (let tries = 0; tries < 8 && !Array.isArray(weekly); tries++) {
+    if (tries) await new Promise((r) => setTimeout(r, 5000));
+    const res = await rest(`repos/${REPO}/stats/commit_activity`);
+    if (res.status === 200) weekly = await res.json();
+  }
+  if (!Array.isArray(weekly)) throw new Error("commit activity is still being computed");
 
-  // Sidebar: four threads, each with a status dot that changes as the story runs.
-  out.push(text(24, 70, "t3code", { size: 11.5, fill: C.muted, weight: 600 }));
-  out.push(rect(16, 80, 148, 24, C.raised, { rx: 6 }));
-  const threads = [
-    ["Faster sidebar", [[2.7, 8.0, C.amber], [8.0, 9.6, C.violet], [9.6, 13.6, C.amber], [13.6, D - 0.5, C.green]]],
-    ["Fix GIF paste", [[0, 11.5, C.amber], [11.5, D - 0.5, C.green]]],
-    ["Theme library", [[0, D - 0.5, C.green]]],
-    ["Windows updater", [[0, 5, C.green], [5, 15.8, C.amber], [15.8, D - 0.5, C.green]]],
-  ];
-  threads.forEach(([title, states], i) => {
-    const y = 96 + i * 26;
-    out.push(text(26, y, title, { size: 12, fill: i === 0 ? C.fg : C.muted }));
-    out.push(`<circle cx="150" cy="${y - 4}" r="3.5" fill="#2e2e2e"/>`);
-    for (const [from, to, fill] of states) {
-      out.push(`<circle cx="150" cy="${y - 4}" r="3.5" fill="${fill}" style="${show(from, to, 0.15)}"/>`);
-    }
-  });
+  // Merged PRs per month since the repo was created, everyone's and mine, in one query.
+  const months = [];
+  const created = new Date(repo.created_at);
+  const now = new Date();
+  for (let d = new Date(Date.UTC(created.getUTCFullYear(), created.getUTCMonth(), 1)); d <= now; d.setUTCMonth(d.getUTCMonth() + 1)) {
+    const end = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0));
+    months.push({ month: d.getUTCMonth(), range: `${d.toISOString().slice(0, 10)}..${end.toISOString().slice(0, 10)}` });
+  }
+  const search = (q) => `search(query: "${q}", type: ISSUE) { issueCount }`;
+  const counts = await graphql(`{
+    total: ${search(`repo:${REPO} is:pr is:merged`)}
+    repository(owner: "pingdotgg", name: "t3code") { releases { totalCount } }
+    ${months.map((m, i) => `a${i}: ${search(`repo:${REPO} is:pr is:merged merged:${m.range}`)} b${i}: ${search(`repo:${REPO} is:pr is:merged author:${login} merged:${m.range}`)}`).join("\n")}
+  }`);
 
-  // Thread header, with the agent switching from Claude to Codex.
-  out.push(text(186, 64, "Faster sidebar", { size: 13, weight: 600 }));
-  out.push(text(596, 64, "Claude Opus 5.5", { size: 11.5, fill: C.muted, anchor: "end", style: show(0, 6.4) }));
-  out.push(text(596, 64, "Codex", { size: 11.5, fill: C.violet, anchor: "end", style: show(6.4) }));
-  out.push(`<line x1="171" y1="76.5" x2="610" y2="76.5" stroke="${C.border}"/>`);
-
-  // The feed, scrolled up as it grows.
-  const feed = [];
-  let y = 90;
-  const scrolls = [];
-  const item = (at, height, body) => {
-    feed.push(g(show(at), body(y)));
-    scrolls.push([at, Math.max(0, y + height - 334)]);
-    y += height;
-  };
-  const tool = (verb, rest) => (top) =>
-    text(188, top + 12, `<tspan fill="${C.faint}">●</tspan>  <tspan fill="${C.fg}">${verb}</tspan>  ${rest}`, { size: 11, fill: C.muted, font: MONO });
-  const ask = "the sidebar feels slow, can you find out why?";
-  item(2.7, 40, (top) => rect(592 - ask.length * 6.4 - 24, top, ask.length * 6.4 + 24, 28, C.raised, { rx: 10 }) + text(580, top + 18.5, ask, { anchor: "end" }));
-  item(3.3, 20, (top) => text(188, top + 12, "Claude Opus 5.5", { size: 11, fill: C.muted, weight: 600 }));
-  item(3.8, 18, tool("Searched", `"branch label" in apps/web`));
-  item(4.4, 20, tool("Read", "apps/server/src/vcs/VcsStatusBroadcaster.ts"));
-  item(5.2, 24, (top) => text(188, top + 14, "Every branch label asks git for the full working-tree status."));
-  item(6.2, 26, (top) => text(188, top + 15, "↳ Claude handed the fix to Codex", { fill: C.violet }));
-  item(6.9, 20, (top) => text(188, top + 12, "Codex", { size: 11, fill: C.muted, weight: 600 }));
-  item(7.4, 22, (top) =>
-    text(188, top + 12, `<tspan fill="${C.faint}">●</tspan>  <tspan fill="${C.fg}">Edited</tspan>  19 files  <tspan fill="${C.green}">+751</tspan> <tspan fill="${C.red}">−49</tspan>`, { size: 11, fill: C.muted, font: MONO }),
-  );
-  item(8.0, 64, (top) =>
-    rect(186, top, 408, 54, C.panel, { rx: 10, stroke: C.border }) +
-    text(200, top + 20, "Codex wants to run", { size: 11, fill: C.muted }) +
-    text(200, top + 40, "pnpm exec vp run check:changed", { size: 12, font: MONO }) +
-    g(show(8.0, 9.6, 0.15),
-      rect(462, top + 16, 60, 24, C.fg, { rx: 6 }) + text(492, top + 32, "Approve", { size: 11.5, fill: C.bg, weight: 600, anchor: "middle" }) +
-      text(552, top + 32, "Deny", { size: 11.5, fill: C.muted, anchor: "middle" })) +
-    g(show(9.6), text(580, top + 32, "✓ Approved on iPhone", { size: 11.5, fill: C.green, anchor: "end" })),
-  );
-  item(10.2, 22, (top) =>
-    text(188, top + 12, `<tspan fill="${C.faint}">●</tspan>  <tspan fill="${C.fg}">Ran</tspan>  check:changed  <tspan fill="${C.green}">116 tests passed</tspan>`, { size: 11, fill: C.muted, font: MONO }),
-  );
-  item(10.9, 30, (top) => text(188, top + 14, "Branch labels now ask for the branch alone. Ready to ship."));
-  item(12.0, 38, (top) =>
-    ["Commit", "Push", "Open PR"].map((label, i) => {
-      const x = 188 + i * 78;
-      return rect(x, top, 70, 26, C.panel, { rx: 6, stroke: C.border }) +
-        rect(x, top, 70, 26, C.fg, { rx: 6, style: show(12.2 + i * 0.45, D - 0.5, 0.12) }) +
-        text(x + 35, top + 17, label, { size: 11.5, fill: C.fg, anchor: "middle" }) +
-        text(x + 35, top + 17, label, { size: 11.5, fill: C.bg, weight: 600, anchor: "middle", style: show(12.2 + i * 0.45, D - 0.5, 0.12) });
-    }).join(""),
-  );
-  item(13.6, 56, (top) =>
-    rect(186, top, 408, 48, C.panel, { rx: 10, stroke: C.border }) +
-    text(200, top + 20, "#32947 · pingdotgg/t3code", { size: 11, fill: C.muted, font: MONO }) +
-    text(200, top + 38, "perf(sidebar): avoid full git status for branch labels", { size: 12.5 }) +
-    text(580, top + 20, "Open", { size: 11.5, fill: C.green, weight: 600, anchor: "end", style: show(13.6, 15.0, 0.12) }) +
-    text(580, top + 20, "Merged", { size: 11.5, fill: C.violet, weight: 600, anchor: "end", style: show(15.0) }),
-  );
-  const lastScroll = scrolls.at(-1)[1];
-  const scrollFrames = scrolls.map(([at, s], i) => {
-    const prev = i === 0 ? 0 : scrolls[i - 1][1];
-    return `${p(at)}{transform:translateY(${-prev}px)}${p(at + 0.3)}{transform:translateY(${-s}px)}`;
-  });
-  out.push(`<clipPath id="feed"><rect x="171" y="77" width="439" height="259"/></clipPath>`);
-  out.push(`<g clip-path="url(#feed)"><g style="${anim(`0%{transform:translateY(0)}${scrollFrames.join("")}100%{transform:translateY(${-lastScroll}px)}`, "ease-out")}">${feed.join("")}</g></g>`);
-
-  // Composer: the question is typed, sent, and the placeholder returns.
-  out.push(rect(182, 344, 416, 54, C.panel, { rx: 12, stroke: C.border }));
-  out.push(text(196, 366, "Ask anything, @ to add files", { size: 12, fill: C.faint, style: `${show(0, 0.45, 0.1)}` }));
-  out.push(text(196, 366, "Ask anything, @ to add files", { size: 12, fill: C.faint, style: show(2.7) }));
-  const typed = ask.length * 6.5;
-  out.push(`<clipPath id="composer"><rect x="183" y="345" width="414" height="52" rx="11"/></clipPath>`);
-  out.push(`<g clip-path="url(#composer)">`);
-  out.push(g(show(0.45, 2.6, 0.1),
-    text(196, 366, ask) +
-    `<g style="${anim(`0%,${p(0.5)}{transform:translateX(0)}${p(2.3)},100%{transform:translateX(${typed.toFixed(0)}px)}`, `steps(${ask.length}, end)`)}">` +
-      rect(195, 352, 400, 20, C.panel) + rect(195, 354, 1.5, 15, C.fg) + `</g>`));
-  out.push(`</g>`);
-  out.push(text(196, 388, "Claude Opus 5.5 · Full access", { size: 10.5, fill: C.faint, style: show(0, 6.4) }));
-  out.push(text(196, 388, "Codex · Full access", { size: 10.5, fill: C.faint, style: show(6.4) }));
-  out.push(`<circle cx="580" cy="381" r="10" fill="${C.fg}"/>`);
-  out.push(text(580, 385.5, "↑", { size: 12, fill: C.bg, weight: 700, anchor: "middle" }));
-
-  // Phone: the same thread, where the approval lands.
-  const px = 636;
-  out.push(rect(px + 0.5, 20.5, 194, 392, C.bg, { rx: 30, stroke: "#3a3a3a" }));
-  out.push(rect(px + 72, 30, 50, 15, "#1c1c1c", { rx: 7.5 }));
-  out.push(text(px + 26, 42, "9:41", { size: 10.5, weight: 600 }));
-  out.push(text(px + 16, 74, "Faster sidebar", { size: 12.5, weight: 600 }));
-  out.push(text(px + 16, 90, "t3code · Claude Opus 5.5", { size: 10, fill: C.muted, style: show(0, 6.4) }));
-  out.push(text(px + 16, 90, "t3code · Codex", { size: 10, fill: C.violet, style: show(6.4) }));
-  out.push(`<line x1="${px + 1}" y1="100.5" x2="${px + 194}" y2="100.5" stroke="${C.border}"/>`);
-  out.push(g(show(2.8),
-    rect(px + 38, 112, 144, 40, C.raised, { rx: 10 }) +
-    text(px + 172, 128, "the sidebar feels slow,", { size: 10.5, anchor: "end" }) +
-    text(px + 172, 143, "can you find out why?", { size: 10.5, anchor: "end" })));
-  out.push(g(show(5.3),
-    text(px + 16, 174, "Every branch label asks git", { size: 10.5 }) +
-    text(px + 16, 189, "for the full working-tree status.", { size: 10.5 })));
-  out.push(g(show(6.3), text(px + 16, 212, "↳ handed to Codex", { size: 10.5, fill: C.violet })));
-  out.push(g(show(11.0),
-    text(px + 16, 236, "Branch labels now ask for the", { size: 10.5 }) +
-    text(px + 16, 251, "branch alone. Ready to ship.", { size: 10.5 })));
-
-  // The approval sheet slides up, is tapped, and leaves.
-  const sheet =
-    rect(px + 6, 262, 182, 142, "#111111", { rx: 18, stroke: C.border }) +
-    rect(px + 80, 270, 34, 4, "#3a3a3a", { rx: 2 }) +
-    text(px + 18, 294, "Codex wants to run", { size: 10.5, fill: C.muted }) +
-    text(px + 18, 312, "pnpm exec vp run", { size: 10.5, font: MONO }) +
-    text(px + 18, 327, "check:changed", { size: 10.5, font: MONO }) +
-    rect(px + 16, 340, 162, 30, C.fg, { rx: 9 }) +
-    text(px + 97, 359.5, "Approve", { size: 12, fill: C.bg, weight: 600, anchor: "middle" }) +
-    rect(px + 16, 340, 162, 30, C.green, { rx: 9, style: show(9.5, D - 0.5, 0.1) }) +
-    text(px + 97, 359.5, "✓ Approved", { size: 12, fill: C.bg, weight: 600, anchor: "middle", style: show(9.5, D - 0.5, 0.1) }) +
-    text(px + 97, 390, "Deny", { size: 11, fill: C.muted, anchor: "middle" });
-  out.push(`<clipPath id="phone"><rect x="${px + 1}" y="21" width="193" height="391" rx="29"/></clipPath>`);
-  out.push(`<g clip-path="url(#phone)"><g style="${anim(`0%,${p(8.0)}{transform:translateY(160px)}${p(8.4)},${p(10.1)}{transform:translateY(0)}${p(10.5)},100%{transform:translateY(160px)}`, "ease-out")}">${sheet}</g></g>`);
-  // The tap.
-  out.push(`<circle cx="${px + 110}" cy="355" r="13" fill="#ffffff" fill-opacity="0.35" stroke="#ffffff" stroke-width="2" style="opacity:0;${anim(`0%,${p(8.9)}{opacity:0}${p(9.05)}{opacity:1}${p(9.45)}{opacity:1}${p(9.6)},100%{opacity:0}`)}"/>`);
-  // Merged banner.
-  out.push(g(`${show(15.1)}`,
-    rect(px + 10, 52, 174, 40, "#151515", { rx: 12, stroke: C.border }) +
-    text(px + 22, 69, "T3 Code", { size: 10, fill: C.muted, weight: 600 }) +
-    text(px + 22, 84, "#32947 merged", { size: 11, fill: C.violet, weight: 600 })));
-
-  // Footer: the agents (the active one lights up) and the repo's numbers.
-  const agents = ["Claude Code", "Codex", "Cursor", "OpenCode", "Grok Build", "Antigravity", "Kiro", "Pi", "Muse Code", "fx"];
-  const lit = { "Claude Code": [3.3, 6.4], Codex: [6.4, D - 0.5] };
-  const spans = agents.map((a) => {
-    const window = lit[a];
-    const style = window
-      ? ` style="${anim(`0%,${p(window[0])}{fill:${C.muted}}${p(window[0] + 0.2)},${p(window[1])}{fill:${C.fg}}${p(window[1] + 0.2)},100%{fill:${C.muted}}`)}"`
-      : "";
-    return `<tspan${style}>${a}</tspan>`;
-  });
-  out.push(text(W / 2, 442, `Works with ${spans.join(", ")} and any ACP agent`, { size: 12, fill: C.muted, anchor: "middle" }));
-  const fmt = (v) => v.toLocaleString("en-US");
-  out.push(text(W / 2, 464, esc(`★ ${fmt(stars)} stars  ·  ${fmt(contributors)} contributors  ·  ${release}  ·  MIT  ·  desktop, web, iOS and Android`), { size: 11.5, fill: C.faint, anchor: "middle" }));
-
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="T3 Code: a thread handed from Claude to Codex, approved from a phone, shipped as a pull request"><style>${css.join("")}</style>${out.join("")}</svg>\n`;
-}
-
-// Live numbers for the footer, from GitHub's REST API.
-export async function t3codeStats(token) {
-  const get = (path) =>
-    fetch(`https://api.github.com/${path}`, {
-      headers: { authorization: `bearer ${token}`, "user-agent": "profile-t3code", accept: "application/vnd.github+json" },
-    });
-  const [repo, release, contributors] = await Promise.all([
-    get("repos/pingdotgg/t3code").then((r) => r.json()),
-    get("repos/pingdotgg/t3code/releases/latest").then((r) => r.json()),
-    get("repos/pingdotgg/t3code/contributors?per_page=1"),
-  ]);
-  const last = contributors.headers.get("link")?.match(/[?&]page=(\d+)>; rel="last"/);
   return {
     stars: repo.stargazers_count,
-    release: release.tag_name,
-    contributors: last ? Number(last[1]) : (await contributors.json()).length,
+    contributors,
+    releases: counts.repository.releases.totalCount,
+    merged: counts.total.issueCount,
+    weekly: weekly.map((w) => ({ week: w.week, total: w.total })),
+    monthly: months.map((m, i) => ({ month: m.month, all: counts[`a${i}`].issueCount, mine: counts[`b${i}`].issueCount })),
   };
+}
+
+// "T3 CODE" as a git graph: each letter is a branch line with commits at its
+// joints, the lanes running green to cyan, blue and violet. The lines draw themselves in, then the commits pop in, once per page load.
+const LETTERS = {
+  T: { lines: [[[0, 0], [4, 0]], [[2, 0], [2, 6]]], dots: [[0, 0], [4, 0], [2, 6]] },
+  3: { lines: [[[0, 0], [4, 0], [4, 6], [0, 6]], [[1.5, 3], [4, 3]]], dots: [[0, 0], [1.5, 3], [0, 6]] },
+  C: { lines: [[[4, 0], [0, 0], [0, 6], [4, 6]]], dots: [[4, 0], [4, 6]] },
+  O: { lines: [[[0, 0], [4, 0], [4, 6], [0, 6], [0, 0]]], dots: [[0, 0], [4, 6]] },
+  D: { lines: [[[0, 0], [2.6, 0], [4, 1.4], [4, 4.6], [2.6, 6], [0, 6], [0, 0]]], dots: [[0, 0], [0, 6]] },
+  E: { lines: [[[4, 0], [0, 0], [0, 6], [4, 6]], [[0, 3], [3, 3]]], dots: [[4, 0], [3, 3], [4, 6]] },
+};
+
+export function t3codeTitleSvg(theme) {
+  const t = THEMES[theme];
+  const U = 15; // grid unit
+  const pad = 10;
+  let x = 0;
+  const placed = [];
+  for (const ch of ["T", "3", " ", "C", "O", "D", "E"]) {
+    if (ch === " ") { x += 3.5; continue; }
+    placed.push({ ch, x });
+    x += 6;
+  }
+  const width = (x - 2) * U + pad * 2;
+  const height = 6 * U + pad * 2;
+  const css = [
+    "@keyframes draw{from{stroke-dashoffset:1}to{stroke-dashoffset:0}}",
+    "@keyframes pop{from{opacity:0;transform:scale(0.2)}to{opacity:1;transform:scale(1)}}",
+  ];
+  const out = [`<defs><linearGradient id="lane" gradientUnits="userSpaceOnUse" x1="${pad}" y1="0" x2="${width - pad}" y2="0">` +
+    `${t.lane.map((c, i) => `<stop offset="${i / (t.lane.length - 1)}" stop-color="${c}"/>`).join("")}</linearGradient></defs>`];
+  const at = ([gx, gy], ox) => [pad + (ox + gx) * U, pad + gy * U];
+  placed.forEach(({ ch, x: ox }, i) => {
+    const { lines, dots } = LETTERS[ch];
+    lines.forEach((line, j) => {
+      const d = line.map((pt, k) => `${k ? "L" : "M"}${at(pt, ox).join(" ")}`).join(" ");
+      out.push(`<path d="${d}" pathLength="1" fill="none" stroke="url(#lane)" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" ` +
+        `style="stroke-dasharray:1;stroke-dashoffset:1;animation:draw 0.7s cubic-bezier(.5,0,.2,1) ${(0.15 + i * 0.16 + j * 0.2).toFixed(2)}s forwards"/>`);
+    });
+    dots.forEach((pt, j) => {
+      const [cx, cy] = at(pt, ox);
+      out.push(`<g transform="translate(${cx} ${cy})"><circle r="6.5" fill="${t.bg}" stroke="url(#lane)" stroke-width="3.5" ` +
+        `style="opacity:0;animation:pop 0.35s cubic-bezier(.3,1.6,.5,1) ${(0.75 + i * 0.16 + j * 0.08).toFixed(2)}s forwards"/></g>`);
+    });
+  });
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" role="img" aria-label="T3 Code"><style>${css.join("")}</style>${out.join("")}</svg>\n`;
+}
+
+// Round a maximum up to a tidy axis top, so its half is a tidy gridline too.
+const niceTop = (max) => {
+  const step = 10 ** Math.floor(Math.log10(max / 2));
+  return Math.ceil(max / 2 / step) * step * 2;
+};
+
+// A bar drawn upward from (0, 0), its top corners rounded by r.
+const bar = (w, h, fill, r = 2) => {
+  if (h <= 0) return "";
+  const rr = Math.min(r, w / 2, h);
+  return `<path d="M0 0 V${-(h - rr)} Q0 ${-h} ${rr} ${-h} H${w - rr} Q${w} ${-h} ${w} ${-(h - rr)} V0 Z" fill="${fill}"/>`;
+};
+
+export function t3codeChartsSvg(s, theme) {
+  const t = THEMES[theme];
+  const W = 840;
+  const H = 316;
+  const css = [
+    "@keyframes rise{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}",
+    "@keyframes grow{from{transform:scaleY(0)}to{transform:scaleY(1)}}",
+    "@keyframes fade{from{opacity:0}to{opacity:1}}",
+  ];
+  const text = (x, y, str, { size = 11, fill = t.muted, weight = 400, anchor = "start", style = "" } = {}) =>
+    `<text x="${x}" y="${y}" font-size="${size}" fill="${fill}" font-weight="${weight}" text-anchor="${anchor}"${style ? ` style="${style}"` : ""}>${str}</text>`;
+  const fadeIn = (delay) => `opacity:0;animation:fade 0.5s ease ${delay.toFixed(2)}s forwards`;
+  const out = [];
+
+  // Headline numbers.
+  const heads = [[s.stars, "stars"], [s.contributors, "contributors"], [s.merged, "merged pull requests"], [s.releases, "releases"]];
+  heads.forEach(([value, label], i) => {
+    out.push(`<g style="opacity:0;animation:rise 0.6s cubic-bezier(.2,.7,.2,1) ${(i * 0.12).toFixed(2)}s forwards">` +
+      text(i * 214, 34, fmt(value), { size: 30, fill: t.fg, weight: 700 }) + text(i * 214, 56, label, { size: 12.5 }) + `</g>`);
+  });
+
+  const top = 104;
+  const base = 290;
+  const plotH = base - top - 30;
+  const axis = (x0, x1, yTop) =>
+    [0, yTop / 2, yTop].map((v) => {
+      const y = base - (v / yTop) * plotH;
+      return `<line x1="${x0}" x2="${x1}" y1="${y}" y2="${y}" stroke="${t.grid}"/>` + text(x0 - 6, y + 4, fmt(v), { size: 10, anchor: "end" });
+    }).join("");
+
+  // Commits per week, last 52 weeks.
+  {
+    const x0 = 38;
+    const x1 = 396;
+    const yTop = niceTop(Math.max(...s.weekly.map((w) => w.total)));
+    const step = (x1 - x0) / s.weekly.length;
+    out.push(text(0, top, "Commits per week, last 52 weeks", { size: 13, fill: t.fg, weight: 600 }));
+    out.push(axis(x0, x1, yTop));
+    let peak = 0;
+    s.weekly.forEach((w, i) => {
+      if (w.total > s.weekly[peak].total) peak = i;
+      out.push(`<g transform="translate(${(x0 + i * step + 1).toFixed(1)} ${base})"><g style="transform:scaleY(0);animation:grow 0.7s cubic-bezier(.2,.7,.2,1) ${(0.4 + i * 0.018).toFixed(3)}s forwards">${bar(step - 2, (w.total / yTop) * plotH, t.all)}</g></g>`);
+    });
+    const px = x0 + peak * step + step / 2;
+    out.push(text(px, base - (s.weekly[peak].total / yTop) * plotH - 7, `${fmt(s.weekly[peak].total)} at the peak`, { size: 10.5, fill: t.fg, weight: 600, anchor: px > x1 - 50 ? "end" : "middle", style: fadeIn(1.6) }));
+    [0, Math.floor(s.weekly.length / 2), s.weekly.length - 1].forEach((i, k) => {
+      const d = new Date(s.weekly[i].week * 1000);
+      out.push(text(x0 + i * step + step / 2, base + 16, `${MONTH(d.getUTCMonth())} ${d.getUTCFullYear()}`, { size: 10, anchor: ["start", "middle", "end"][k] }));
+    });
+  }
+
+  // Merged PRs per month: everyone else's, with mine stacked on top.
+  {
+    const x0 = 482;
+    const x1 = W;
+    const yTop = niceTop(Math.max(...s.monthly.map((m) => m.all)));
+    const step = (x1 - x0) / s.monthly.length;
+    const bw = Math.min(26, step - 8);
+    out.push(text(440, top, "Merged pull requests per month", { size: 13, fill: t.fg, weight: 600 }));
+    out.push(`<rect x="${W - 132}" y="${top - 9}" width="10" height="10" rx="2" fill="${t.all}"/>` + text(W - 118, top, "everyone"));
+    out.push(`<rect x="${W - 54}" y="${top - 9}" width="10" height="10" rx="2" fill="${t.mine}"/>` + text(W - 40, top, "mine"));
+    out.push(axis(x0, x1, yTop));
+    s.monthly.forEach((m, i) => {
+      const x = x0 + i * step + (step - bw) / 2;
+      const hRest = ((m.all - m.mine) / yTop) * plotH;
+      const hMine = m.mine > 0 ? Math.max((m.mine / yTop) * plotH, 2) : 0;
+      // A 2px surface gap separates my segment from everyone else's.
+      const mine = hMine ? `<g transform="translate(0 ${-(hRest + 2)})">${bar(bw, hMine, t.mine)}</g>` : "";
+      out.push(`<g transform="translate(${x.toFixed(1)} ${base})"><g style="transform:scaleY(0);animation:grow 0.8s cubic-bezier(.2,.7,.2,1) ${(0.5 + i * 0.07).toFixed(2)}s forwards">${bar(bw, hRest, t.all, hMine ? 0 : 2)}${mine}</g></g>`);
+      out.push(text(x + bw / 2, base + 16, MONTH(m.month), { size: 10, anchor: "middle" }));
+    });
+    // Direct labels on the busiest month: its total and my part of it.
+    const best = s.monthly.reduce((b, m, i) => (m.all > s.monthly[b].all ? i : b), 0);
+    const bm = s.monthly[best];
+    const lx = x0 + best * step + step / 2;
+    const ly = base - (bm.all / yTop) * plotH - 4;
+    const anchor = best === s.monthly.length - 1 ? "end" : "middle";
+    const ax = anchor === "end" ? x0 + best * step + (step + bw) / 2 : lx;
+    out.push(text(ax, ly - 16, fmt(bm.all), { size: 10.5, fill: t.fg, weight: 600, anchor, style: fadeIn(1.7) }));
+    out.push(text(ax, ly - 4, `${fmt(bm.mine)} mine`, { size: 10, anchor, style: fadeIn(1.8) }));
+  }
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" font-family='${SANS}' role="img" aria-label="T3 Code: ${fmt(s.stars)} stars, ${fmt(s.contributors)} contributors, ${fmt(s.merged)} merged pull requests, ${fmt(s.releases)} releases; commits per week and merged pull requests per month"><style>${css.join("")}</style>${out.join("")}</svg>\n`;
 }
