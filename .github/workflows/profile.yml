@@ -1,4 +1,5 @@
-# Every day: draws the contribution snake onto the output branch, where
+# Every day: draws the contribution snake and the title (profile/generate.mjs)
+# onto the output branch, where
 # README.md loads it from, and refreshes the merged T3 Code PR count in README.md.
 name: Profile
 
@@ -16,16 +17,14 @@ jobs:
   snake:
     runs-on: ubuntu-latest
     steps:
-      - uses: Platane/snk@v3.5.0
-        with:
-          github_user_name: ${{ github.repository_owner }}
-          outputs: |
-            dist/snake-light.svg
-            dist/snake-dark.svg?palette=github-dark
+      - uses: actions/checkout@v7.0.1
+      - name: Draw the snake and the title
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node profile/generate.mjs dist
       - name: Publish to the output branch
         run: |
-          # dist belongs to root (the snk container), so publish from a copy
-          mkdir out && cp dist/*.svg out/ && cd out
+          cd dist
           git init -q -b output
           git add .
           git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" commit -q -m "Update snake"

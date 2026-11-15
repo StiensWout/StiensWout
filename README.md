@@ -1,11 +1,16 @@
-# Hi, I'm Wout
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/StiensWout/StiensWout/output/title-dark.svg">
+    <img alt="Wout Stiens" src="https://raw.githubusercontent.com/StiensWout/StiensWout/output/title-light.svg">
+  </picture>
+</p>
 
-I build things in Brussels: mostly on [T3 Code](https://github.com/pingdotgg/t3code), and [Mr. Streamer](https://mrstreamer.app) on the side.
-
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/StiensWout/StiensWout/output/snake-dark.svg">
-  <img alt="My GitHub contributions, eaten by a snake" src="https://raw.githubusercontent.com/StiensWout/StiensWout/output/snake-light.svg">
-</picture>
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/StiensWout/StiensWout/output/snake-dark.svg">
+    <img alt="My last year of GitHub contributions, eaten by a growing snake" src="https://raw.githubusercontent.com/StiensWout/StiensWout/output/snake-light.svg">
+  </picture>
+</p>
 
 ## T3 Code
 
