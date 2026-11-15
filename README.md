@@ -28,7 +28,7 @@
 <details>
 <summary><b>What I built in it</b></summary>
 
-[210 merged PRs](https://github.com/pingdotgg/t3code/pulls?q=is%3Apr+author%3AStiensWout+is%3Amerged) so far, among them:
+[211 merged PRs](https://github.com/pingdotgg/t3code/pulls?q=is%3Apr+author%3AStiensWout+is%3Amerged) so far, among them:
 
 - The [Pi coding agent](https://github.com/pingdotgg/t3code/pull/7211) as a provider, and [standardized ACP providers](https://github.com/pingdotgg/t3code/pull/6461)
 - Terminals [rendered with libghostty-vt](https://github.com/pingdotgg/t3code/pull/4860), with faster history, scrollback and links
