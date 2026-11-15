@@ -14,13 +14,24 @@
 
 ## T3 Code
 
-[pingdotgg/t3code](https://github.com/pingdotgg/t3code), the best way to control Claude Code, Codex and more from any computer or phone. [210 merged PRs](https://github.com/pingdotgg/t3code/pulls?q=is%3Apr+author%3AStiensWout+is%3Amerged) so far, among them:
+<a href="https://t3.codes"><img alt="T3 Code: a thread started at the desk, handed from Claude to Codex, approved from the phone and shipped as a pull request" src="https://raw.githubusercontent.com/StiensWout/StiensWout/output/t3code.svg"></a>
+
+**[T3 Code](https://github.com/pingdotgg/t3code)** is the open-source control plane for coding agents. It runs the agents on your machine and gives them one fast interface: start a thread at your desk, then approve the next step from your phone.
+
+[Download](https://t3.codes/download) · [iOS](https://apps.apple.com/us/app/t3-code-remote-claude-more/id6787819824) · [Android](https://play.google.com/store/apps/details?id=com.t3tools.t3code) · [Web](https://app.t3.codes) · [GitHub](https://github.com/pingdotgg/t3code)
+
+<details>
+<summary><b>What I built in it</b></summary>
+
+[210 merged PRs](https://github.com/pingdotgg/t3code/pulls?q=is%3Apr+author%3AStiensWout+is%3Amerged) so far, among them:
 
 - The [Pi coding agent](https://github.com/pingdotgg/t3code/pull/7211) as a provider, and [standardized ACP providers](https://github.com/pingdotgg/t3code/pull/6461)
 - Terminals [rendered with libghostty-vt](https://github.com/pingdotgg/t3code/pull/4860), with faster history, scrollback and links
 - A [theme library](https://github.com/pingdotgg/t3code/pull/5226), [OKLCH palettes](https://github.com/pingdotgg/t3code/pull/6036) and [configurable fonts](https://github.com/pingdotgg/t3code/pull/5103)
 - A [cold-start bundle cut in half](https://github.com/pingdotgg/t3code/pull/9058) and a long run of server and desktop speedups
 - Mobile fixes, like [starting a thread on an existing branch](https://github.com/pingdotgg/t3code/pull/10359)
+
+</details>
 
 ## Mr. Streamer
 

@@ -4,10 +4,12 @@
 //                           day, then a results screen and a countdown to the
 //                           next run
 //   title-{dark,light}.svg  the name spelled in contribution cells
+//   t3code.svg              an animated T3 Code scene with the repo's live numbers (t3code.mjs)
 //
 //   GITHUB_TOKEN=... node profile/generate.mjs [OUT_DIR]
 //   CALENDAR_JSON=cal.json node profile/generate.mjs [OUT_DIR]   (offline)
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { t3codeStats, t3codeSvg } from "./t3code.mjs";
 
 const LOGIN = process.env.PROFILE_LOGIN ?? "StiensWout";
 const NAME = "WOUT STIENS";
@@ -304,4 +306,8 @@ for (const theme of Object.keys(THEMES)) {
   writeFileSync(`${OUT}/snake-${theme}.svg`, snakeSvg(calendar, theme));
   writeFileSync(`${OUT}/title-${theme}.svg`, titleSvg(theme));
 }
+const repoStats = process.env.CALENDAR_JSON
+  ? { stars: 61027, contributors: 478, release: "v0.1.9" }
+  : await t3codeStats(process.env.GITHUB_TOKEN);
+writeFileSync(`${OUT}/t3code.svg`, t3codeSvg(repoStats));
 console.log(`wrote ${OUT}: ${calendar.totalContributions} contributions`);
