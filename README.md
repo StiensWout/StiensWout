@@ -7,8 +7,8 @@
 
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/StiensWout/StiensWout/output/snake-dark.svg">
-    <img alt="My last year of GitHub contributions, eaten by a growing snake" src="https://raw.githubusercontent.com/StiensWout/StiensWout/output/snake-light.svg">
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/StiensWout/StiensWout/output/snake-dark.svg?v=2">
+    <img alt="My last year of GitHub contributions, eaten by a growing snake" src="https://raw.githubusercontent.com/StiensWout/StiensWout/output/snake-light.svg?v=2">
   </picture>
 </p>
 
