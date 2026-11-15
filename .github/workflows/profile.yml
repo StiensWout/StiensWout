@@ -1,0 +1,46 @@
+# Every day: draws the contribution snake onto the output branch, where
+# README.md loads it from, and refreshes the merged T3 Code PR count in README.md.
+name: Profile
+
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  snake:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: Platane/snk@v3.5.0
+        with:
+          github_user_name: ${{ github.repository_owner }}
+          outputs: |
+            dist/snake-light.svg
+            dist/snake-dark.svg?palette=github-dark
+      - name: Publish to the output branch
+        run: |
+          cd dist
+          git init -q -b output
+          git add .
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" commit -q -m "Update snake"
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" output
+
+  pr-count:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - name: Refresh the merged T3 Code PR count
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          n=$(gh api "search/issues?q=repo:pingdotgg/t3code+author:${{ github.repository_owner }}+is:pr+is:merged&per_page=1" --jq .total_count)
+          [ "$n" -gt 0 ]
+          sed -i -E "s/\[[0-9,]+ merged PRs\]/[$n merged PRs]/" README.md
+          git diff --quiet && exit 0
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" commit -q -am "Update the T3 Code PR count to $n"
+          git push
