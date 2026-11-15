@@ -331,7 +331,7 @@ const slower = (svg, factor = 2.4) =>
   svg.replace(/animation:([^;"]*)/g, (_, decl) => `animation:${decl.replace(/(\d*\.?\d+)s\b/g, (__, n) => `${(Number(n) * factor).toFixed(2)}s`)}`);
 
 const BUTTONS = {
-  t3code: [["Download", "#3fb950"], ["iOS", "#39c5cf"], ["Android", "#58a6ff"], ["Web", "#8b8cf6"], ["GitHub", "#a371f7"]],
+  t3code: [["Download"], ["iOS"], ["Android"], ["Web"], ["GitHub"]],
   mrstreamer: [["mrstreamer.app"], ["Download"], ["GitHub"]],
 };
 for (const theme of Object.keys(THEMES)) {
@@ -343,9 +343,9 @@ for (const theme of Object.keys(THEMES)) {
   writeFileSync(`${OUT}/mrstreamer-guide-${theme}.svg`, slower(mrstreamerGuideSvg(theme), 1.6));
   writeFileSync(`${OUT}/mrstreamer-${theme}.svg`, slower(mrstreamerChartsSvg(ms, theme)));
   for (const [section, buttons] of Object.entries(BUTTONS)) {
-    buttons.forEach(([label, accent], index) => {
+    buttons.forEach(([label], index) => {
       const slug = label.toLowerCase().replace(/[^a-z0-9]+/g, "-");
-      writeFileSync(`${OUT}/button-${section}-${slug}-${theme}.svg`, buttonSvg(label, theme, { index, accent }));
+      writeFileSync(`${OUT}/button-${section}-${slug}-${theme}.svg`, buttonSvg(label, theme, { index }));
     });
   }
 }

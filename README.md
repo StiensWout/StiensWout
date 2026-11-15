@@ -31,36 +31,11 @@
 </p>
 
 <p align="center">
-  <a href="https://t3.codes/download">
-    <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/StiensWout/StiensWout/output/button-t3code-download-dark.svg?v=4">
-      <img alt="Download" src="https://raw.githubusercontent.com/StiensWout/StiensWout/output/button-t3code-download-light.svg?v=4">
-    </picture>
-  </a>
-  <a href="https://apps.apple.com/us/app/t3-code-remote-claude-more/id6787819824">
-    <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/StiensWout/StiensWout/output/button-t3code-ios-dark.svg?v=4">
-      <img alt="iOS" src="https://raw.githubusercontent.com/StiensWout/StiensWout/output/button-t3code-ios-light.svg?v=4">
-    </picture>
-  </a>
-  <a href="https://play.google.com/store/apps/details?id=com.t3tools.t3code">
-    <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/StiensWout/StiensWout/output/button-t3code-android-dark.svg?v=4">
-      <img alt="Android" src="https://raw.githubusercontent.com/StiensWout/StiensWout/output/button-t3code-android-light.svg?v=4">
-    </picture>
-  </a>
-  <a href="https://app.t3.codes">
-    <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/StiensWout/StiensWout/output/button-t3code-web-dark.svg?v=4">
-      <img alt="Web" src="https://raw.githubusercontent.com/StiensWout/StiensWout/output/button-t3code-web-light.svg?v=4">
-    </picture>
-  </a>
-  <a href="https://github.com/pingdotgg/t3code">
-    <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/StiensWout/StiensWout/output/button-t3code-github-dark.svg?v=4">
-      <img alt="GitHub" src="https://raw.githubusercontent.com/StiensWout/StiensWout/output/button-t3code-github-light.svg?v=4">
-    </picture>
-  </a>
+  <a href="https://t3.codes/download"><picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/StiensWout/StiensWout/output/button-t3code-download-dark.svg?v=5"><img alt="Download" src="https://raw.githubusercontent.com/StiensWout/StiensWout/output/button-t3code-download-light.svg?v=5"></picture></a>
+  <a href="https://apps.apple.com/us/app/t3-code-remote-claude-more/id6787819824"><picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/StiensWout/StiensWout/output/button-t3code-ios-dark.svg?v=5"><img alt="iOS" src="https://raw.githubusercontent.com/StiensWout/StiensWout/output/button-t3code-ios-light.svg?v=5"></picture></a>
+  <a href="https://play.google.com/store/apps/details?id=com.t3tools.t3code"><picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/StiensWout/StiensWout/output/button-t3code-android-dark.svg?v=5"><img alt="Android" src="https://raw.githubusercontent.com/StiensWout/StiensWout/output/button-t3code-android-light.svg?v=5"></picture></a>
+  <a href="https://app.t3.codes"><picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/StiensWout/StiensWout/output/button-t3code-web-dark.svg?v=5"><img alt="Web" src="https://raw.githubusercontent.com/StiensWout/StiensWout/output/button-t3code-web-light.svg?v=5"></picture></a>
+  <a href="https://github.com/pingdotgg/t3code"><picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/StiensWout/StiensWout/output/button-t3code-github-dark.svg?v=5"><img alt="GitHub" src="https://raw.githubusercontent.com/StiensWout/StiensWout/output/button-t3code-github-light.svg?v=5"></picture></a>
 </p>
 
 <p align="center">
@@ -100,24 +75,9 @@
 </p>
 
 <p align="center">
-  <a href="https://mrstreamer.app">
-    <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/StiensWout/StiensWout/output/button-mrstreamer-mrstreamer-app-dark.svg?v=4">
-      <img alt="mrstreamer.app" src="https://raw.githubusercontent.com/StiensWout/StiensWout/output/button-mrstreamer-mrstreamer-app-light.svg?v=4">
-    </picture>
-  </a>
-  <a href="https://github.com/Mr-Streamer-OSS/MrStreamer/releases/latest">
-    <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/StiensWout/StiensWout/output/button-mrstreamer-download-dark.svg?v=4">
-      <img alt="Download" src="https://raw.githubusercontent.com/StiensWout/StiensWout/output/button-mrstreamer-download-light.svg?v=4">
-    </picture>
-  </a>
-  <a href="https://github.com/Mr-Streamer-OSS/MrStreamer">
-    <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/StiensWout/StiensWout/output/button-mrstreamer-github-dark.svg?v=4">
-      <img alt="GitHub" src="https://raw.githubusercontent.com/StiensWout/StiensWout/output/button-mrstreamer-github-light.svg?v=4">
-    </picture>
-  </a>
+  <a href="https://mrstreamer.app"><picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/StiensWout/StiensWout/output/button-mrstreamer-mrstreamer-app-dark.svg?v=5"><img alt="mrstreamer.app" src="https://raw.githubusercontent.com/StiensWout/StiensWout/output/button-mrstreamer-mrstreamer-app-light.svg?v=5"></picture></a>
+  <a href="https://github.com/Mr-Streamer-OSS/MrStreamer/releases/latest"><picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/StiensWout/StiensWout/output/button-mrstreamer-download-dark.svg?v=5"><img alt="Download" src="https://raw.githubusercontent.com/StiensWout/StiensWout/output/button-mrstreamer-download-light.svg?v=5"></picture></a>
+  <a href="https://github.com/Mr-Streamer-OSS/MrStreamer"><picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/StiensWout/StiensWout/output/button-mrstreamer-github-dark.svg?v=5"><img alt="GitHub" src="https://raw.githubusercontent.com/StiensWout/StiensWout/output/button-mrstreamer-github-light.svg?v=5"></picture></a>
 </p>
 
 <p align="center">
